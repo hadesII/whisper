@@ -192,6 +192,7 @@ class TextDecoder(nn.Module):
 
         mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)
         self.register_buffer("mask", mask, persistent=False)
+        self.prompt_embedding = nn.Embedding(24,n_state)
 
     def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None):
         """
@@ -201,8 +202,11 @@ class TextDecoder(nn.Module):
             the encoded audio features to be attended on
         """
         offset = next(iter(kv_cache.values())).shape[1] if kv_cache else 0
+        x1 = self.token_embedding(x[:,0:1])
+        x2 = self.prompt_embedding(x[:,1:4])
+        x3 = self.token_embedding(x[:,4:])
         x = (
-            self.token_embedding(x)
+            torch.concat([x1,x2,x3],dim=1)
             + self.positional_embedding[offset : offset + x.shape[-1]]
         )
         x = x.to(xa.dtype)
