@@ -6,6 +6,7 @@ from functools import cached_property, lru_cache
 from typing import Dict, List, Optional, Tuple
 
 import tiktoken
+from tiktoken_ext.openai_public import gpt2
 
 LANGUAGES = {
     "en": "english",
@@ -160,6 +161,13 @@ class Tokenizer:
 
     def decode(self, token_ids: List[int], **kwargs) -> str:
         token_ids = [t for t in token_ids if t < self.timestamp_begin]
+        return self.encoding.decode(token_ids, **kwargs)
+
+    def decode_sk(self, token_ids: List[int], skip_special_tokens=True, **kwargs):
+        if skip_special_tokens:
+            token_ids = [t for t in token_ids if t < self.encoding.eot_token]
+        else:
+            token_ids = [t for t in token_ids if t < self.timestamp_begin]
         return self.encoding.decode(token_ids, **kwargs)
 
     def decode_with_timestamps(self, token_ids: List[int], **kwargs) -> str:
@@ -351,7 +359,7 @@ def get_encoding(name: str = "gpt2"):
     return tiktoken.Encoding(
         name=os.path.basename(vocab_path),
         explicit_n_vocab=n_vocab,
-        pat_str=r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        pat_str=gpt2()["pat_str"],
         mergeable_ranks=ranks,
         special_tokens=special_tokens,
     )

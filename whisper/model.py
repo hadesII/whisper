@@ -215,9 +215,9 @@ class TextDecoder(nn.Module):
             x = block(x, xa, mask=self.mask, kv_cache=kv_cache)
 
         x = self.ln(x)
-        weight = torch.concat([self.token_embedding.weight,self.prompt_embedding.weight])
+        weight = torch.concat([self.token_embedding.weight.to(x.dtype),self.prompt_embedding.weight.to(x.dtype)])
         logits = (
-            x @ torch.transpose(weight.to(x.dtype), 0, 1)
+            x @ torch.transpose(weight, 0, 1)
         ).float()
 
         return logits
