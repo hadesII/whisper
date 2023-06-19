@@ -327,6 +327,13 @@ class Tokenizer:
                 word_tokens[-1].extend(subword_tokens)
 
         return words, word_tokens
+    def decode_sk(self,token_ids:List[int],skip_special_tokens=True,**kwargs):
+        if skip_special_tokens:
+            token_ids = [t for t in token_ids if t < self.encoding.eot_token]
+        else:
+            token_ids = [t for t in token_ids if t < self.timestamp_begin]
+        return self.encoding.decode(token_ids,**kwargs)
+
 
 
 @lru_cache(maxsize=None)
