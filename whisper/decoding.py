@@ -13,6 +13,7 @@ from .utils import compression_ratio
 
 if TYPE_CHECKING:
     from .model import Whisper
+import kenlm
 
 
 @torch.no_grad()
@@ -111,6 +112,11 @@ class DecodingOptions:
     # implementation details
     fp16: bool = True  # use fp16 for most of the calculation
 
+    lm_path: Optional[str] = None
+    alpha: float = 1.0
+    beta: float = 1.0
+    order: int = 5
+
 
 @dataclass(frozen=True)
 class DecodingResult:
@@ -201,6 +207,37 @@ class MaximumLikelihoodRanker(SequenceRanker):
                 result.append(logprob / penalty)
             return result
 
+        # get the sequence with the highest score
+        lengths = [[len(t) for t in s] for s in tokens]
+        return [np.argmax(scores(p, l)) for p, l in zip(sum_logprobs, lengths)]
+
+class LMRanker(SequenceRanker):
+    def __init__(self, length_penalty: Optional[float], tokenizer,lm_path,alpha=1,beta=1,order=5):
+        self.length_penalty = length_penalty
+        self.order = order
+        self.tokenizer = tokenizer
+        self.lm_path = lm_path
+        self.alpha = alpha
+        self.beta = beta
+
+    def rank(
+        self, tokens: List[List[Tensor]], sum_logprobs: List[List[float]]):
+        def add_logprobs(tokens: List[List[Tensor]], sum_logprobs: List[List[float]]
+    ) -> List[List[float]]:
+            model = kenlm.LanguageModel(self.lm_path)
+            lm_logprom = [[model.score(self.tokenizer.decode(token)) for token in tks] for tks in tokens]
+            return  [[self.alpha*a+self.beta*b for a,b in zip(lm,sum)] for lm,sum in zip(lm_logprom,sum_logprobs)]
+        def scores(logprobs, lengths):
+            result = []
+            for logprob, length in zip(logprobs, lengths):
+                if self.length_penalty is None:
+                    penalty = length
+                else:
+                    # from the Google NMT paper
+                    penalty = ((5 + length) / 6) ** self.length_penalty
+                result.append(logprob / penalty)
+            return result
+        sum_logprobs = add_logprobs(tokens,sum_logprobs)
         # get the sequence with the highest score
         lengths = [[len(t) for t in s] for s in tokens]
         return [np.argmax(scores(p, l)) for p, l in zip(sum_logprobs, lengths)]
@@ -530,7 +567,9 @@ class DecodingTask:
         self.inference = PyTorchInference(model, len(self.initial_tokens))
 
         # sequence ranker: implements how to rank a group of sampled sequences
-        self.sequence_ranker = MaximumLikelihoodRanker(options.length_penalty)
+        self.sequence_ranker = LMRanker(length_penalty=options.length_penalty,tokenizer=tokenizer,\
+                                        lm_path=options.lm_path,alpha=options.alpha,beta=options.beta,order=options.order)
+        # self.sequence_ranker = MaximumLikelihoodRanker(options.length_penalty)
 
         # decoder: implements how to select the next tokens, given the autoregressive distribution
         if options.beam_size is not None:
