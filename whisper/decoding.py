@@ -216,7 +216,7 @@ class LMRanker(SequenceRanker):
         self.length_penalty = length_penalty
         self.order = order
         self.tokenizer = tokenizer
-        self.lm_path = lm_path
+        self.model = kenlm.LanguageModel(lm_path)
         self.alpha = alpha
         self.beta = beta
 
@@ -224,8 +224,8 @@ class LMRanker(SequenceRanker):
         self, tokens: List[List[Tensor]], sum_logprobs: List[List[float]]):
         def add_logprobs(tokens: List[List[Tensor]], sum_logprobs: List[List[float]]
     ) -> List[List[float]]:
-            model = kenlm.LanguageModel(self.lm_path)
-            lm_logprom = [[model.score(self.tokenizer.decode(token)) for token in tks] for tks in tokens]
+
+            lm_logprom = [[self.model.score(self.tokenizer.decode(token)) for token in tks] for tks in tokens]
             return  [[self.alpha*a+self.beta*b for a,b in zip(lm,sum)] for lm,sum in zip(lm_logprom,sum_logprobs)]
         def scores(logprobs, lengths):
             result = []
