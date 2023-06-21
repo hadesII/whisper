@@ -695,6 +695,8 @@ class DecodingTask:
 
                 if completed or tokens.shape[-1] > self.n_ctx:
                     break
+        except:
+            import pdb;pdb.set_trace()
         finally:
             self.inference.cleanup_caching()
 
