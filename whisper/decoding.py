@@ -744,21 +744,21 @@ class DecodingTask:
         ]
 
         # select the top-ranked sample in each group
-        selected = self.sequence_ranker.rank(tokens, sum_logprobs)
-        tokens: List[List[int]] = [t[i].tolist() for i, t in zip(selected, tokens)]
-        texts: List[str] = [tokenizer.decode(t).strip() for t in tokens]
+        # selected = self.sequence_ranker.rank(tokens, sum_logprobs)
+        tokens: List[List[int]] = [t[i].tolist() for i,t in  enumerate(tokens[0])]
+        texts: List[str] = [tokenizer.decode(t).strip() for t in tokens[0]]
 
-        sum_logprobs: List[float] = [lp[i] for i, lp in zip(selected, sum_logprobs)]
-        avg_logprobs: List[float] = [
-            lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
-        ]
+        # sum_logprobs: List[float] = [lp[i] for i, lp in zip(selected, sum_logprobs)]
+        # avg_logprobs: List[float] = [
+        #     lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
+        # ]
 
         fields = (
             texts,
             languages,
             tokens,
             audio_features,
-            avg_logprobs,
+            0.0,
             no_speech_probs,
         )
         if len(set(map(len, fields))) != 1:
@@ -770,7 +770,7 @@ class DecodingTask:
                 language=language,
                 tokens=tokens,
                 text=text,
-                avg_logprob=avg_logprob,
+                avg_logprob=0.0,
                 no_speech_prob=no_speech_prob,
                 temperature=self.options.temperature,
                 compression_ratio=compression_ratio(text),
