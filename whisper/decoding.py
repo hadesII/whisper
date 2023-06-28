@@ -795,8 +795,8 @@ class DecodingTask:
         # avg_logprobs: List[float] = [
         #     lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
         # ]
-        kenlm_score:List[float] = [self.kenlm.score(text) for text in texts]
-        translm_score:List[float] = [self.translm.score(text)["positional_scores"] for text in texts]
+        kenlm_score:List[float] = [round(self.kenlm.score(text),3) for text in texts]
+        translm_score:List[float] = [round(self.translm.score(text)["positional_scores"].item(),3) for text in texts]
 
         fields = (
             texts,
