@@ -14,7 +14,7 @@ from .utils import compression_ratio
 if TYPE_CHECKING:
     from .model import Whisper
 import kenlm
-
+from fairseq.models.transformers_lm import TransformerLanguageModel
 
 @torch.no_grad()
 def detect_language(
@@ -116,6 +116,8 @@ class DecodingOptions:
     alpha: float = 1.0
     beta: float = 1.0
     order: int = 5
+    transLM_path: Optional[str] = None
+    transLM_ckpt: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -567,8 +569,10 @@ class DecodingTask:
         self.inference = PyTorchInference(model, len(self.initial_tokens))
 
         # sequence ranker: implements how to rank a group of sampled sequences
-        self.sequence_ranker = LMRanker(length_penalty=options.length_penalty,tokenizer=tokenizer,\
-                                        lm_path=options.lm_path,alpha=options.alpha,beta=options.beta,order=options.order)
+        # self.sequence_ranker = LMRanker(length_penalty=options.length_penalty,tokenizer=tokenizer,\
+        #                                 lm_path=options.lm_path,alpha=options.alpha,beta=options.beta,order=options.order)
+        self.kenlm = kenlm.LanguageModel(options.lm_path)
+        self.translm = TransformerLanguageModel.from_pretrained(options.transLM_path,options.transLM_ckpt)
         # self.sequence_ranker = MaximumLikelihoodRanker(options.length_penalty)
 
         # decoder: implements how to select the next tokens, given the autoregressive distribution
@@ -783,41 +787,48 @@ class DecodingTask:
         ]
 
         # select the top-ranked sample in each group
-        selected = self.sequence_ranker.rank(tokens, sum_logprobs)
-        tokens: List[List[int]] = [t[i].tolist() for i, t in zip(selected, tokens)]
-        texts: List[str] = [tokenizer.decode(t).strip() for t in tokens]
+        # selected = self.sequence_ranker.rank(tokens, sum_logprobs)
+        # tokens: List[List[int]] = [t[i].tolist() for i, t in zip(selected, tokens)]
+        texts: List[str] = [tokenizer.decode(t).strip() for t in tokens[0]]
 
-        sum_logprobs: List[float] = [lp[i] for i, lp in zip(selected, sum_logprobs)]
-        avg_logprobs: List[float] = [
-            lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
-        ]
+        # sum_logprobs: List[float] = [lp[i] for i, lp in zip(selected, sum_logprobs)]
+        # avg_logprobs: List[float] = [
+        #     lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
+        # ]
+        kenlm_score:List[float] = [self.kenlm.score(text) for text in texts]
+        translm_score:List[float] = [self.translm.score(text)["positional_scores"] for text in texts]
 
         fields = (
             texts,
-            languages,
-            tokens,
-            audio_features,
-            avg_logprobs,
-            no_speech_probs,
+            sum_logprobs[0],
+            kenlm_score,
+            translm_score,
+            # languages,
+            # tokens,
+            # audio_features,
+            # # avg_logprobs,
+            # no_speech_probs,
         )
-        if len(set(map(len, fields))) != 1:
-            raise RuntimeError(f"inconsistent result lengths: {list(map(len, fields))}")
 
-        return [
-            DecodingResult(
-                audio_features=features,
-                language=language,
-                tokens=tokens,
-                text=text,
-                avg_logprob=avg_logprob,
-                no_speech_prob=no_speech_prob,
-                temperature=self.options.temperature,
-                compression_ratio=compression_ratio(text),
-            )
-            for text, language, tokens, features, avg_logprob, no_speech_prob in zip(
-                *fields
-            )
-        ]
+        return fields
+        # if len(set(map(len, fields))) != 1:
+        #     raise RuntimeError(f"inconsistent result lengths: {list(map(len, fields))}")
+        #
+        # return [
+        #     DecodingResult(
+        #         audio_features=features,
+        #         language=language,
+        #         tokens=tokens,
+        #         text=text,
+        #         avg_logprob=avg_logprob,
+        #         no_speech_prob=no_speech_prob,
+        #         temperature=self.options.temperature,
+        #         compression_ratio=compression_ratio(text),
+        #     )
+        #     for text, language, tokens, features, avg_logprob, no_speech_prob in zip(
+        #         *fields
+        #     )
+        # ]
 
 
 @torch.no_grad()
