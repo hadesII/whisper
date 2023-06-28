@@ -13,8 +13,6 @@ from .utils import compression_ratio
 
 if TYPE_CHECKING:
     from .model import Whisper
-import kenlm
-from fairseq.models.transformers_lm import TransformerLanguageModel
 
 @torch.no_grad()
 def detect_language(
@@ -571,8 +569,6 @@ class DecodingTask:
         # sequence ranker: implements how to rank a group of sampled sequences
         # self.sequence_ranker = LMRanker(length_penalty=options.length_penalty,tokenizer=tokenizer,\
         #                                 lm_path=options.lm_path,alpha=options.alpha,beta=options.beta,order=options.order)
-        self.kenlm = kenlm.LanguageModel(options.lm_path)
-        self.translm = TransformerLanguageModel.from_pretrained(options.transLM_path,options.transLM_ckpt)
         # self.sequence_ranker = MaximumLikelihoodRanker(options.length_penalty)
 
         # decoder: implements how to select the next tokens, given the autoregressive distribution
@@ -795,14 +791,10 @@ class DecodingTask:
         # avg_logprobs: List[float] = [
         #     lp / (len(t) + 1) for t, lp in zip(tokens, sum_logprobs)
         # ]
-        kenlm_score:List[float] = [round(self.kenlm.score(text),3) for text in texts]
-        translm_score:List[float] = [round(self.translm.score(text)["positional_scores"].item(),3) for text in texts]
 
         fields = (
             texts,
             sum_logprobs[0],
-            kenlm_score,
-            translm_score,
             # languages,
             # tokens,
             # audio_features,
